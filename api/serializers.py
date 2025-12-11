@@ -1,12 +1,6 @@
-from django.contrib.auth.models import User
 from rest_framework import serializers
 from .models import Offer, Order, Review
-
-
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ['id', 'username', 'email']
+from auth_app.api.serializers import UserSerializer
 
 
 class OfferSerializer(serializers.ModelSerializer):

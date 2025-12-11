@@ -1,35 +1,7 @@
-from django.contrib.auth.models import User
-from django.contrib.auth import authenticate
-from rest_framework import viewsets, status, generics, permissions
-from rest_framework.response import Response
-from rest_framework.decorators import action
-from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework import viewsets, permissions
 
 from .models import Offer, Order, Review
-from .serializers import OfferSerializer, OrderSerializer, ReviewSerializer, UserSerializer
-
-
-class RegisterView(generics.CreateAPIView):
-    serializer_class = UserSerializer
-    permission_classes = [permissions.AllowAny]
-
-    def post(self, request, *args, **kwargs):
-        username = request.data.get('username')
-        password = request.data.get('password')
-        email = request.data.get('email', '')
-        if not username or not password:
-            return Response({'detail': 'username and password required'}, status=status.HTTP_400_BAD_REQUEST)
-        user = User.objects.create_user(username=username, password=password, email=email)
-        token, _ = Token.objects.get_or_create(user=user)
-        return Response({'token': token.key, 'user': UserSerializer(user).data}, status=status.HTTP_201_CREATED)
-
-
-class LoginView(ObtainAuthToken):
-    def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        token = Token.objects.get(key=response.data['token'])
-        return Response({'token': token.key})
+from .serializers import OfferSerializer, OrderSerializer, ReviewSerializer
 
 
 class OfferViewSet(viewsets.ModelViewSet):

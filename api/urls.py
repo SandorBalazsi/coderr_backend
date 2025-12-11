@@ -11,6 +11,4 @@ router.register(r'reviews', views.ReviewViewSet, basename='review')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('auth/register/', views.RegisterView.as_view(), name='register'),
-    path('auth/login/', drf_auth_views.obtain_auth_token, name='login'),
 ]
