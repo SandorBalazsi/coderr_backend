@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Offer, Order, Review
+from ..models import Offer, Order, Review
 from auth_app.api.serializers import UserSerializer
 
 
@@ -8,7 +8,7 @@ class OfferSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Offer
-        fields = ['id', 'title', 'description', 'price', 'owner', 'created_at']
+        fields = ['id', 'title', 'description', 'price', 'creator_id', 'created_at']
 
 
 class OrderSerializer(serializers.ModelSerializer):

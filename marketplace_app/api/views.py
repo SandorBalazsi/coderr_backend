@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions
 
-from .models import Offer, Order, Review
+from ..models import Offer, Order, Review
 from .serializers import OfferSerializer, OrderSerializer, ReviewSerializer
 
 

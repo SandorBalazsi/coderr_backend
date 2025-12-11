@@ -2,7 +2,7 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework.authtoken import views as drf_auth_views
 
-from . import views
+from .api import views
 
 router = DefaultRouter()
 router.register(r'offers', views.OfferViewSet, basename='offer')
