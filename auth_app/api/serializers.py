@@ -1,13 +1,39 @@
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
+from auth_app.models import UserProfile
+
 
 class UserSerializer(serializers.ModelSerializer):
-    user_id = serializers.IntegerField(source='id', read_only=True)
+    repeated_password = serializers.CharField(write_only=True, required=True)
+    type = serializers.ChoiceField(choices=['customer', 'provider'], write_only=True, required=True)
     
     class Meta:
         model = User
-        fields = ['user_id', 'username', 'email']
+        fields = ['id', 'username', 'email', 'password', 'repeated_password', 'type']
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'email': {'required': True}
+        }
+    
+    def validate(self, data):
+        """Check that passwords match"""
+        if data['password'] != data['repeated_password']:
+            raise serializers.ValidationError({"repeated_password": "Passwords do not match"})
+        return data
+    
+    def create(self, validated_data):
+        """Create user and profile"""
+
+        repeated_password = validated_data.pop('repeated_password')
+        user_type = validated_data.pop('type')
+
+        user = User.objects.create_user(**validated_data)
+        
+        UserProfile.objects.create(user=user, type=user_type)
+        
+        return user
+
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -53,3 +79,87 @@ class RegisterSerializer(serializers.ModelSerializer):
         )
         
         return user
+    
+class UserProfileSerializer(serializers.ModelSerializer):
+    user = serializers.IntegerField(source='user.id', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    email = serializers.EmailField(source='user.email', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', required=False)
+    last_name = serializers.CharField(source='user.last_name', required=False)
+    
+    class Meta:
+        model = UserProfile
+        fields = [
+            'user',
+            'username',
+            'first_name',
+            'last_name',
+            'file',
+            'location',
+            'tel',
+            'description',
+            'working_hours',
+            'type',
+            'email',
+            'created_at'
+        ]
+        read_only_fields = ['user', 'username', 'email', 'created_at']
+    
+    def update(self, instance, validated_data):
+        """Handle updates to both UserProfile and User model"""
+
+        user_data = validated_data.pop('user', {})
+        if user_data:
+            user = instance.user
+            user.first_name = user_data.get('first_name', user.first_name)
+            user.last_name = user_data.get('last_name', user.last_name)
+            user.save()
+        
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        return instance
+    
+    def to_representation(self, instance):
+        """Ensure empty strings instead of null values"""
+        data = super().to_representation(instance)
+        
+        fields_to_check = ['first_name', 'last_name', 'location', 'tel', 'description', 'working_hours']
+        
+        for field in fields_to_check:
+            if data.get(field) is None:
+                data[field] = ''
+        
+        return data
+    
+class CustomerProfileSerializer(serializers.ModelSerializer):
+    """Simplified serializer for customer profiles - fewer fields"""
+    user = serializers.IntegerField(source='user.id', read_only=True)
+    username = serializers.CharField(source='user.username', read_only=True)
+    first_name = serializers.CharField(source='user.first_name', read_only=True)
+    last_name = serializers.CharField(source='user.last_name', read_only=True)
+    
+    class Meta:
+        model = UserProfile
+        fields = [
+            'user',
+            'username',
+            'first_name',
+            'last_name',
+            'file',
+            'type'
+        ]
+    
+    def to_representation(self, instance):
+        """Ensure empty strings instead of null values"""
+        data = super().to_representation(instance)
+        
+        fields_to_check = ['first_name', 'last_name']
+        
+        for field in fields_to_check:
+            if data.get(field) is None:
+                data[field] = ''
+        
+        return data

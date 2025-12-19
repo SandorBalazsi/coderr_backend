@@ -1,39 +1,35 @@
 from django.contrib.auth.models import User
-from rest_framework import status, generics, permissions, serializers
+from rest_framework import status, generics, permissions, serializers, viewsets, permissions
+from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
 
-from .serializers import UserSerializer, RegisterSerializer
+from auth_app.models import UserProfile
+from .serializers import UserSerializer, RegisterSerializer, UserProfileSerializer, CustomerProfileSerializer
+from .permissions import IsOwnProfile
 
 
 class RegisterView(generics.CreateAPIView):
-
-    serializer_class = RegisterSerializer
+    serializer_class = UserSerializer
     permission_classes = [permissions.AllowAny]
 
-    def create(self, request, *args, **kwargs):
+    def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
+    
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        try:
-            serializer.is_valid(raise_exception=True)
-            user = serializer.save()
-            token, _ = Token.objects.get_or_create(user=user)
-            
-            return Response({
-                'token': token.key,
-                'username': user.username,
-                'email': user.email,
-                'user_id': user.id
-            }, status=status.HTTP_201_CREATED)
-            
-        except serializers.ValidationError as e:
-            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response(
-                {'detail': 'Internal server error'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        user = serializer.save()
+        
+        token, _ = Token.objects.get_or_create(user=user)
+        
+        return Response({
+            'token': token.key,
+            'username': user.username,
+            'email': user.email,
+            'user_id': user.id
+        }, status=status.HTTP_201_CREATED)
 
 
 class LoginView(ObtainAuthToken):
@@ -64,3 +60,46 @@ class LoginView(ObtainAuthToken):
                 {'detail': 'Internal server error'},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+        
+
+class UserProfileViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for viewing and updating user profiles
+    """
+    queryset = UserProfile.objects.all()
+    serializer_class = UserProfileSerializer
+    lookup_field = 'user__id'
+    lookup_url_kwarg = 'pk'
+    
+    def get_permissions(self):
+        """
+        - Anyone can view individual profiles (GET /api/profile/{pk}/)
+        - Only authenticated users can view lists (GET /api/profiles/business/)
+        - Only authenticated users can update (PATCH)
+        - Only owner can update their own profile
+        """
+        if self.action in ['update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated(), IsOwnProfile()]
+        elif self.action in ['business_profiles', 'customer_profiles']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.AllowAny()]
+    
+    @action(detail=False, methods=['get'], url_path='business')
+    def business_profiles(self, request):
+        """
+        GET /api/profiles/business/
+        List all business profiles (authenticated users only)
+        """
+        profiles = UserProfile.objects.filter(type='business')
+        serializer = UserProfileSerializer(profiles, many=True)
+        return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'], url_path='customer')
+    def customer_profiles(self, request):
+        """
+        GET /api/profiles/customer/
+        List all customer profiles with limited fields (authenticated users only)
+        """
+        profiles = UserProfile.objects.filter(type='customer')
+        serializer = CustomerProfileSerializer(profiles, many=True)
+        return Response(serializer.data)

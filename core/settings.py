@@ -3,6 +3,9 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
+
 SECRET_KEY = os.environ.get('DJANGO_SECRET', 'change-me-in-prod')
 
 DEBUG = True
@@ -19,7 +22,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
-    'api',
+    'marketplace_app',
     'auth_app',
 ]
 
