@@ -1,12 +1,24 @@
 from rest_framework import viewsets, permissions
+from rest_framework.pagination import PageNumberPagination
 
 from ..models import Offer, Order, Review
 from .serializers import OfferSerializer, OrderSerializer, ReviewSerializer
+from .list_serializers import OfferListSerializer
+
+
+class CustomPagination(PageNumberPagination):
+    page_size = 10
 
 
 class OfferViewSet(viewsets.ModelViewSet):
     queryset = Offer.objects.all().order_by('-created_at')
     serializer_class = OfferSerializer
+    pagination_class = CustomPagination
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return OfferListSerializer
+        return OfferSerializer
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
