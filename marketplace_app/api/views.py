@@ -3,9 +3,9 @@ from rest_framework import viewsets, permissions, filters
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Min
 
-from ..models import Offer, Order, Review
-from .serializers import OfferSerializer, OrderSerializer, ReviewSerializer
-from .list_serializers import OfferListSerializer
+from ..models import Offer, OfferDetail, Order, Review
+from .serializers import OfferDetailSerializer, OfferDetailViewSerializer, OfferSerializer, OfferListSerializer, OrderSerializer, ReviewSerializer
+
 
 
 class OfferPagination(PageNumberPagination):
@@ -24,7 +24,10 @@ class OfferViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self):
         if self.action == 'list':
             return OfferListSerializer
+        elif self.action == 'retrieve':
+            return OfferDetailViewSerializer
         return OfferSerializer
+
 
     def get_queryset(self):
         queryset = Offer.objects.all()
@@ -72,7 +75,16 @@ class OfferViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
+    def get_permissions(self):
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticatedOrReadOnly()]
 
+class OfferDetailViewSet(viewsets.ReadOnlyModelViewSet):
+
+    queryset = OfferDetail.objects.all()
+    serializer_class = OfferDetailSerializer
+    permission_classes = [permissions.AllowAny]
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all().order_by('-created_at')
