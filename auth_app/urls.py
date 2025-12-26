@@ -10,6 +10,6 @@ urlpatterns = [
     path('', include(router.urls)),
     path('profiles/business/', views.UserProfileViewSet.as_view({'get': 'business_profiles'}), name='business-profiles'),
     path('profiles/customer/', views.UserProfileViewSet.as_view({'get': 'customer_profiles'}), name='customer-profiles'),
-    path('register/', views.RegisterView.as_view(), name='register'),
+    path('registration/', views.RegisterView.as_view(), name='registration'),
     path('login/', views.LoginView.as_view(), name='login'),
 ] 

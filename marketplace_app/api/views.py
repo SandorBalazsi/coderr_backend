@@ -1,7 +1,10 @@
 
-from rest_framework import viewsets, permissions, filters
+from rest_framework import viewsets, permissions, filters, status
+from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.db.models import Min
+from rest_framework.views import APIView
+from django.contrib.auth.models import User
 
 from ..models import Offer, OfferDetail, Order, Review
 from .serializers import OfferDetailSerializer, OfferDetailViewSerializer, OfferSerializer, OfferListSerializer, OrderSerializer, ReviewSerializer
@@ -98,6 +101,70 @@ class OrderViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(buyer=self.request.user)
 
+class OrderCountView(APIView):
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    def get(self, request, business_user_id):
+        try:
+            business_user = User.objects.get(id=business_user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'detail': 'Kein Geschäftsnutzer mit der angegebenen ID gefunden.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        try:
+            profile = business_user.profile
+            if profile.type != 'business':
+                return Response(
+                    {'detail': 'Der angegebene Benutzer ist kein Geschäftsnutzer.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except:
+            return Response(
+                {'detail': 'Kein Geschäftsnutzer mit der angegebenen ID gefunden.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        count = Order.objects.filter(
+            buyer_id=business_user_id,
+            status='in_progress'
+        ).count()
+        
+        return Response({'order_count': count})
+
+
+class CompletedOrderCountView(APIView):
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    def get(self, request, business_user_id):
+        try:
+            business_user = User.objects.get(id=business_user_id)
+        except User.DoesNotExist:
+            return Response(
+                {'detail': 'Kein Geschäftsnutzer mit der angegebenen ID gefunden.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            profile = business_user.profile
+            if profile.type != 'business':
+                return Response(
+                    {'detail': 'Der angegebene Benutzer ist kein Geschäftsnutzer.'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        except:
+            return Response(
+                {'detail': 'Kein Geschäftsnutzer mit der angegebenen ID gefunden.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        count = Order.objects.filter(
+            buyer_id=business_user_id,
+            status='completed'
+        ).count()
+        
+        return Response({'completed_order_count': count})
 
 class ReviewViewSet(viewsets.ModelViewSet):
     queryset = Review.objects.all().order_by('-created_at')

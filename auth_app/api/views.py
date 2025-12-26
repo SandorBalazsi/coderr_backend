@@ -63,21 +63,13 @@ class LoginView(ObtainAuthToken):
         
 
 class UserProfileViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint for viewing and updating user profiles
-    """
     queryset = UserProfile.objects.all()
     serializer_class = UserProfileSerializer
     lookup_field = 'user__id'
     lookup_url_kwarg = 'pk'
     
     def get_permissions(self):
-        """
-        - Anyone can view individual profiles (GET /api/profile/{pk}/)
-        - Only authenticated users can view lists (GET /api/profiles/business/)
-        - Only authenticated users can update (PATCH)
-        - Only owner can update their own profile
-        """
+
         if self.action in ['update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), IsOwnProfile()]
         elif self.action in ['business_profiles', 'customer_profiles']:
@@ -86,20 +78,14 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='business')
     def business_profiles(self, request):
-        """
-        GET /api/profiles/business/
-        List all business profiles (authenticated users only)
-        """
+
         profiles = UserProfile.objects.filter(type='business')
         serializer = UserProfileSerializer(profiles, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'], url_path='customer')
     def customer_profiles(self, request):
-        """
-        GET /api/profiles/customer/
-        List all customer profiles with limited fields (authenticated users only)
-        """
+
         profiles = UserProfile.objects.filter(type='customer')
         serializer = CustomerProfileSerializer(profiles, many=True)
         return Response(serializer.data)

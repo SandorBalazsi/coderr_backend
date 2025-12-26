@@ -50,13 +50,13 @@ class OfferDetail(models.Model):
 
 class Order(models.Model):
     buyer = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='orders')
-    offer = models.ForeignKey(Offer, on_delete=models.CASCADE, related_name='orders')
+    offer_detail = models.ForeignKey(OfferDetail, on_delete=models.CASCADE, related_name='orders') 
+    status = models.CharField(max_length=30, default='in_progress')
     created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(max_length=30, default='pending')
+    updated_at = models.DateTimeField(auto_now=True) 
 
     def __str__(self):
-        return f'Order #{self.id} - {self.offer.title}'
-
+        return f'Order #{self.id} - {self.offer_detail.title}'
 
 class Review(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='reviews')

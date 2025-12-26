@@ -6,7 +6,7 @@ from auth_app.models import UserProfile
 
 class UserSerializer(serializers.ModelSerializer):
     repeated_password = serializers.CharField(write_only=True, required=True)
-    type = serializers.ChoiceField(choices=['customer', 'provider'], write_only=True, required=True)
+    type = serializers.ChoiceField(choices=['customer', 'business'], write_only=True, required=True)
     
     class Meta:
         model = User

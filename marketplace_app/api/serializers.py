@@ -115,14 +115,41 @@ class OfferSerializer(serializers.ModelSerializer):
 
 
 class OrderSerializer(serializers.ModelSerializer):
-    buyer = UserSerializer(read_only=True)
-    offer = OfferSerializer(read_only=True)
-    offer_id = serializers.PrimaryKeyRelatedField(
-        queryset=Offer.objects.all(), write_only=True, source='offer')
+    customer_user = serializers.PrimaryKeyRelatedField(source='buyer', read_only=True)
+    business_user = serializers.SerializerMethodField()
+    offer_detail_id = serializers.PrimaryKeyRelatedField(
+        queryset=OfferDetail.objects.all(), 
+        write_only=True, 
+        source='offer_detail'
+    )
+    
+    title = serializers.CharField(source='offer_detail.title', read_only=True)
+    revisions = serializers.IntegerField(source='offer_detail.revisions', read_only=True)
+    delivery_time_in_days = serializers.IntegerField(source='offer_detail.delivery_time_in_days', read_only=True)
+    price = serializers.DecimalField(source='offer_detail.price', max_digits=10, decimal_places=2, read_only=True)
+    features = serializers.JSONField(source='offer_detail.features', read_only=True)
+    offer_type = serializers.CharField(source='offer_detail.offer_type', read_only=True)
 
     class Meta:
         model = Order
-        fields = ['id', 'buyer', 'offer', 'offer_id', 'status', 'created_at']
+        fields = [
+            'id', 
+            'customer_user', 
+            'business_user', 
+            'title', 
+            'revisions', 
+            'delivery_time_in_days', 
+            'price', 
+            'features', 
+            'offer_type', 
+            'status', 
+            'created_at',
+            'updated_at',
+            'offer_detail_id'
+        ]
+
+    def get_business_user(self, obj):
+        return obj.offer_detail.offer.owner.id
 
 
 class ReviewSerializer(serializers.ModelSerializer):

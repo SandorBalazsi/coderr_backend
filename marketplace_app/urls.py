@@ -13,4 +13,6 @@ router.register(r'reviews', views.ReviewViewSet, basename='review')
 
 urlpatterns = [
     path('', include(router.urls)),
+    path('order-count/<int:business_user_id>/', views.OrderCountView.as_view(), name='order-count'),
+    path('completed-order-count/<int:business_user_id>/', views.CompletedOrderCountView.as_view(), name='completed-order-count'),
 ]
