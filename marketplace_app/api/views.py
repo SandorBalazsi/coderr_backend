@@ -2,9 +2,12 @@
 from rest_framework import viewsets, permissions, filters, status
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.exceptions import PermissionDenied
 from django.db.models import Min
 from rest_framework.views import APIView
 from django.contrib.auth.models import User
+from django.db.models import Avg
+from auth_app.models import UserProfile
 
 from ..models import Offer, OfferDetail, Order, Review
 from .serializers import OfferDetailSerializer, OfferDetailViewSerializer, OfferSerializer, OfferListSerializer, OrderSerializer, ReviewSerializer
@@ -167,8 +170,61 @@ class CompletedOrderCountView(APIView):
         return Response({'completed_order_count': count})
 
 class ReviewViewSet(viewsets.ModelViewSet):
-    queryset = Review.objects.all().order_by('-created_at')
+    queryset = Review.objects.all().select_related('business_user', 'reviewer').order_by('-created_at')
     serializer_class = ReviewSerializer
-
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ['updated_at', 'rating']
+    
+    def get_permissions(self):
+        if self.action in ['create']:
+            return [permissions.IsAuthenticated()]
+        elif self.action in ['update', 'partial_update', 'destroy']:
+            return [permissions.IsAuthenticated()]
+        return [permissions.IsAuthenticatedOrReadOnly()]
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+  
+        business_user_id = self.request.query_params.get('business_user_id', None)
+        if business_user_id:
+            queryset = queryset.filter(business_user_id=business_user_id)
+        
+        reviewer_id = self.request.query_params.get('reviewer_id', None)
+        if reviewer_id:
+            queryset = queryset.filter(reviewer_id=reviewer_id)
+        
+        return queryset
+    
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        serializer.save(reviewer=self.request.user)
+    
+    def perform_update(self, serializer):
+        if serializer.instance.reviewer != self.request.user:
+            raise PermissionDenied("Sie können nur Ihre eigenen Bewertungen bearbeiten.")
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        if instance.reviewer != self.request.user:
+            raise PermissionDenied("Sie können nur Ihre eigenen Bewertungen löschen.")
+        instance.delete()
+
+class BaseInfoView(APIView):
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request):
+        review_count = Review.objects.count()
+        
+        avg_rating = Review.objects.aggregate(Avg('rating'))['rating__avg']
+        average_rating = round(avg_rating, 1) if avg_rating else 0.0
+        
+        business_profile_count = UserProfile.objects.filter(type='business').count()
+        
+        # Anzahl Offers
+        offer_count = Offer.objects.count()
+        
+        return Response({
+            'review_count': review_count,
+            'average_rating': average_rating,
+            'business_profile_count': business_profile_count,
+            'offer_count': offer_count
+        })

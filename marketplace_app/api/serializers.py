@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from ..models import Offer, OfferDetail, Order, Review
 from auth_app.api.serializers import UserSerializer
-
+from django.contrib.auth.models import User
 
 class OfferDetailSerializer(serializers.ModelSerializer):
     class Meta:
@@ -153,8 +153,26 @@ class OrderSerializer(serializers.ModelSerializer):
 
 
 class ReviewSerializer(serializers.ModelSerializer):
-    user = UserSerializer(read_only=True)
-
+    business_user = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        required=True
+    )
+    reviewer = serializers.PrimaryKeyRelatedField(read_only=True)
+    
     class Meta:
         model = Review
-        fields = ['id', 'user', 'offer', 'rating', 'comment', 'created_at']
+        fields = ['id', 'business_user', 'reviewer', 'rating', 'description', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'reviewer', 'created_at', 'updated_at']
+    
+    def validate_rating(self, value):
+        if value < 1 or value > 5:
+            raise serializers.ValidationError("Rating muss zwischen 1 und 5 liegen.")
+        return value
+    
+    def validate_business_user(self, value):
+        try:
+            if value.profile.type != 'business':
+                raise serializers.ValidationError("Bewertungen können nur für Business-Nutzer erstellt werden.")
+        except:
+            raise serializers.ValidationError("Der angegebene Benutzer hat kein gültiges Profil.")
+        return value
