@@ -2,6 +2,16 @@ from django.conf import settings
 from django.db import models
 
 class UserProfile(models.Model):
+    """
+    Extended profile information for a Django `User`.
+
+    Attributes:
+        user: One-to-one link to the `User` model.
+        type: Either 'customer' or 'business', used by permission logic.
+        file: Optional profile image.
+        location, tel, description, working_hours: Optional profile metadata.
+        created_at: Profile creation timestamp.
+    """
     TYPE_CHOICES = [
         ('customer', 'Customer'),
         ('business', 'Business'),

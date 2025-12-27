@@ -15,6 +15,12 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [permissions.AllowAny]
 
     def post(self, request, *args, **kwargs):
+        """
+        Handle user registration POST requests.
+
+        Validates input, creates a `User` (and `UserProfile` via serializer),
+        and returns an auth token on success.
+        """
         serializer = self.get_serializer(data=request.data)
     
         if not serializer.is_valid():
@@ -37,6 +43,12 @@ class LoginView(ObtainAuthToken):
     permission_classes = [permissions.AllowAny]
     
     def post(self, request, *args, **kwargs):
+        """
+        Authenticate a user using credentials from the request and return
+        an auth token on success.
+
+        Returns 400 if credentials are invalid, or 500 on unexpected errors.
+        """
         try:
             serializer = self.serializer_class(
                 data=request.data,
@@ -69,7 +81,13 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     lookup_url_kwarg = 'pk'
     
     def get_permissions(self):
+        """
+        Return permission instances depending on the viewset action.
 
+        - update/partial_update/destroy: Only the profile owner may modify.
+        - business_profiles/customer_profiles: authenticated users only.
+        - otherwise: allow any.
+        """
         if self.action in ['update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated(), IsOwnProfile()]
         elif self.action in ['business_profiles', 'customer_profiles']:
@@ -78,14 +96,20 @@ class UserProfileViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'], url_path='business')
     def business_profiles(self, request):
+        """
+        Custom action returning a list of all business type user profiles.
 
+        Returns serialized `UserProfile` objects with default visibility.
+        """
         profiles = UserProfile.objects.filter(type='business')
         serializer = UserProfileSerializer(profiles, many=True)
         return Response(serializer.data)
     
     @action(detail=False, methods=['get'], url_path='customer')
     def customer_profiles(self, request):
-
+        """
+        Custom action returning a list of all customer type user profiles.
+        """
         profiles = UserProfile.objects.filter(type='customer')
         serializer = CustomerProfileSerializer(profiles, many=True)
         return Response(serializer.data)

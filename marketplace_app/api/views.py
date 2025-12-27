@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from django.contrib.auth.models import User
 from django.db.models import Avg
 from auth_app.models import UserProfile
+from marketplace_app.api.permissions import IsBusinessUser, IsCustomerUser, IsOrderOwner, IsReviewOwner
 
 from ..models import Offer, OfferDetail, Order, Review
 from .serializers import OfferDetailSerializer, OfferDetailViewSerializer, OfferSerializer, OfferListSerializer, OrderSerializer, ReviewSerializer
@@ -28,6 +29,13 @@ class OfferViewSet(viewsets.ModelViewSet):
     ordering_fields = ['updated_at', 'created_at']
 
     def get_serializer_class(self):
+        """
+        Select the appropriate serializer class depending on the action.
+
+        Returns:
+            Serializer class: `OfferListSerializer` for list, `OfferDetailViewSerializer`
+            for retrieve, otherwise `OfferSerializer` for create/update operations.
+        """
         if self.action == 'list':
             return OfferListSerializer
         elif self.action == 'retrieve':
@@ -36,12 +44,27 @@ class OfferViewSet(viewsets.ModelViewSet):
 
 
     def get_queryset(self):
+        """
+        Return a queryset of `Offer` objects filtered and ordered according to
+        query parameters.
+
+        Supported query params:
+            - `creator_id`: filters offers by owner id.
+            - `min_price`: include offers whose lowest detail price >= value.
+            - `max_delivery_time`: include offers whose fastest delivery <= value.
+            - `ordering`: supports 'min_price' and '-min_price' (uses annotated values)
+              as well as normal model field ordering.
+
+        Returns:
+            QuerySet: The filtered/ordered queryset with `owner` selected and
+            `details` prefetched for performance.
+        """
         queryset = Offer.objects.all()
-    
+
         creator_id = self.request.query_params.get('creator_id', None)
         if creator_id:
             queryset = queryset.filter(owner_id=creator_id)
-    
+
         min_price = self.request.query_params.get('min_price', None)
         if min_price:
             try:
@@ -51,7 +74,7 @@ class OfferViewSet(viewsets.ModelViewSet):
                 ).filter(lowest_price__gte=min_price)
             except ValueError:
                 pass
-    
+
         max_delivery_time = self.request.query_params.get('max_delivery_time', None)
         if max_delivery_time:
             try:
@@ -61,7 +84,7 @@ class OfferViewSet(viewsets.ModelViewSet):
                 ).filter(fastest_delivery__lte=max_delivery_time)
             except ValueError:
                 pass
-    
+
         ordering = self.request.query_params.get('ordering', None)
         if ordering == 'min_price':
             queryset = queryset.annotate(
@@ -75,13 +98,25 @@ class OfferViewSet(viewsets.ModelViewSet):
             queryset = queryset.order_by(ordering)
         else:
             queryset = queryset.order_by('-created_at')
-    
+
         return queryset.select_related('owner').prefetch_related('details')
 
     def perform_create(self, serializer):
+        """
+        Save a new `Offer` instance setting the `owner` to the requesting user.
+
+        Parameters:
+            serializer: The serializer instance with validated data.
+        """
         serializer.save(owner=self.request.user)
 
     def get_permissions(self):
+        """
+        Return permission instances depending on the action.
+
+        - Authenticated users are required for create/update/destroy operations.
+        - Read-only actions allow unauthenticated access.
+        """
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
             return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticatedOrReadOnly()]
@@ -93,21 +128,52 @@ class OfferDetailViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = [permissions.AllowAny]
 
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all().order_by('-created_at')
+    queryset = Order.objects.all().select_related(
+        'buyer', 
+        'offer_detail__offer__owner'
+    ).order_by('-created_at')
     serializer_class = OrderSerializer
 
     def get_permissions(self):
-        if self.action in ['create']:
+        """
+        Return permission instances for `OrderViewSet` based on action.
+
+        - `create`: authenticated users only.
+        - `update`/`partial_update`: authenticated business users who own the order.
+        - `destroy`: admin users only.
+        - others: read-only access allowed.
+        """
+        if self.action == 'create':
             return [permissions.IsAuthenticated()]
+        elif self.action in ['update', 'partial_update']:
+            return [permissions.IsAuthenticated(), IsBusinessUser(), IsOrderOwner()]
+        elif self.action == 'destroy':
+            return [permissions.IsAdminUser()]
         return [permissions.IsAuthenticatedOrReadOnly()]
 
     def perform_create(self, serializer):
+        """
+        Persist a new `Order` setting the `buyer` to the requesting user.
+
+        Parameters:
+            serializer: The serializer instance with validated data.
+        """
         serializer.save(buyer=self.request.user)
 
 class OrderCountView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     
     def get(self, request, business_user_id):
+        """
+        Return the number of in-progress orders for a given business user id.
+
+        Parameters:
+            request: DRF request object.
+            business_user_id (int): Primary key of the business user.
+
+        Returns:
+            Response: JSON response with `order_count` or 404 if user/profile invalid.
+        """
         try:
             business_user = User.objects.get(id=business_user_id)
         except User.DoesNotExist:
@@ -141,6 +207,11 @@ class CompletedOrderCountView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     
     def get(self, request, business_user_id):
+        """
+        Return the number of completed orders for a given business user id.
+
+        See `OrderCountView.get` for behavior; this filters `status='completed'.`
+        """
         try:
             business_user = User.objects.get(id=business_user_id)
         except User.DoesNotExist:
@@ -176,15 +247,31 @@ class ReviewViewSet(viewsets.ModelViewSet):
     ordering_fields = ['updated_at', 'rating']
     
     def get_permissions(self):
-        if self.action in ['create']:
-            return [permissions.IsAuthenticated()]
+        """
+        Return permission instances for `ReviewViewSet` actions.
+
+        - `create`: must be an authenticated customer user.
+        - update/partial_update/destroy: must be the review owner.
+        - otherwise: read-only access allowed.
+        """
+        if self.action == 'create':
+            # Nur Customer-User dürfen Reviews erstellen
+            return [permissions.IsAuthenticated(), IsCustomerUser()]
         elif self.action in ['update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated()]
+            # Nur der Ersteller darf seine Review bearbeiten/löschen
+            return [permissions.IsAuthenticated(), IsReviewOwner()]
         return [permissions.IsAuthenticatedOrReadOnly()]
     
     def get_queryset(self):
+        """
+        Optionally filter reviews by `business_user_id` or `reviewer_id`
+        query parameters.
+
+        Returns:
+            QuerySet: Filtered review queryset.
+        """
         queryset = super().get_queryset()
-  
+
         business_user_id = self.request.query_params.get('business_user_id', None)
         if business_user_id:
             queryset = queryset.filter(business_user_id=business_user_id)
@@ -196,22 +283,24 @@ class ReviewViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
+        """
+        Save a new `Review` setting the `reviewer` to the requesting user.
+        """
         serializer.save(reviewer=self.request.user)
-    
-    def perform_update(self, serializer):
-        if serializer.instance.reviewer != self.request.user:
-            raise PermissionDenied("Sie können nur Ihre eigenen Bewertungen bearbeiten.")
-        serializer.save()
-    
-    def perform_destroy(self, instance):
-        if instance.reviewer != self.request.user:
-            raise PermissionDenied("Sie können nur Ihre eigenen Bewertungen löschen.")
-        instance.delete()
 
 class BaseInfoView(APIView):
     permission_classes = [permissions.AllowAny]
     
     def get(self, request):
+        """
+        Return summary base information used by the frontend dashboard.
+
+        Provides counts for reviews, average rating, number of business profiles,
+        and total offers.
+
+        Returns:
+            Response: JSON object with aggregated values.
+        """
         review_count = Review.objects.count()
         
         avg_rating = Review.objects.aggregate(Avg('rating'))['rating__avg']

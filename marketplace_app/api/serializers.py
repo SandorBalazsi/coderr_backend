@@ -18,6 +18,15 @@ class OfferDetailListSerializer(serializers.ModelSerializer):
         fields = ['id', 'url']
 
     def get_url(self, obj):
+        """
+        Return a simple detail URL for the given `OfferDetail` instance.
+
+        Parameters:
+            obj (OfferDetail): The offer detail instance.
+
+        Returns:
+            str: A relative URL to the offer detail resource.
+        """
         return f'/offerdetails/{obj.id}/'
 
 
@@ -57,6 +66,22 @@ class OfferSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'image', 'description', 'details']
 
     def validate_details(self, value):
+        """
+        Validate the `details` nested list when creating/updating an `Offer`.
+
+        Enforces that non-partial requests include exactly three detail objects
+        with offer types 'basic', 'standard' and 'premium'. For partial updates
+        this check is skipped.
+
+        Parameters:
+            value (list): List of detail dicts provided in the request.
+
+        Returns:
+            list: The validated `details` value.
+
+        Raises:
+            serializers.ValidationError: If the details list is invalid.
+        """
 
         if not self.partial:
             if len(value) != 3:
@@ -70,6 +95,16 @@ class OfferSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        """
+        Create an `Offer` and its nested `OfferDetail` items.
+
+        Parameters:
+            validated_data (dict): Data validated by the serializer, must
+                include a `details` list of detail dicts.
+
+        Returns:
+            Offer: The newly created `Offer` instance with persisted details.
+        """
         details_data = validated_data.pop('details')
         offer = Offer.objects.create(**validated_data)
 
@@ -80,6 +115,21 @@ class OfferSerializer(serializers.ModelSerializer):
 
 
     def update(self, instance, validated_data):
+        """
+        Update an `Offer` instance and optionally its nested `OfferDetail`s.
+
+        Behavior:
+            - Updates top-level `Offer` fields present in `validated_data`.
+            - If `details` is provided, it updates existing details by
+              `offer_type` or creates new `OfferDetail`s for missing types.
+
+        Parameters:
+            instance (Offer): The offer instance to update.
+            validated_data (dict): Validated input data, may contain `details`.
+
+        Returns:
+            Offer: The updated `Offer` instance.
+        """
         details_data = validated_data.pop('details', None)
 
         instance.title = validated_data.get('title', instance.title)
@@ -149,6 +199,15 @@ class OrderSerializer(serializers.ModelSerializer):
         ]
 
     def get_business_user(self, obj):
+        """
+        SerializerMethodField returning the business (owner) user id for an order.
+
+        Parameters:
+            obj (Order): Order instance being serialized.
+
+        Returns:
+            int: Primary key of the business user who owns the related offer.
+        """
         return obj.offer_detail.offer.owner.id
 
 
@@ -165,11 +224,36 @@ class ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'reviewer', 'created_at', 'updated_at']
     
     def validate_rating(self, value):
+        """
+        Ensure rating is within the allowed range (1-5).
+
+        Parameters:
+            value (int): Candidate rating value.
+
+        Returns:
+            int: The validated rating value.
+
+        Raises:
+            serializers.ValidationError: If rating is outside 1-5.
+        """
         if value < 1 or value > 5:
             raise serializers.ValidationError("Rating muss zwischen 1 und 5 liegen.")
         return value
     
     def validate_business_user(self, value):
+        """
+        Validate that the provided `business_user` corresponds to a profile
+        with type 'business'.
+
+        Parameters:
+            value (User): Candidate business user instance.
+
+        Returns:
+            User: The validated user.
+
+        Raises:
+            serializers.ValidationError: If the user has no profile or is not a business.
+        """
         try:
             if value.profile.type != 'business':
                 raise serializers.ValidationError("Bewertungen können nur für Business-Nutzer erstellt werden.")
